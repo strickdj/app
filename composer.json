@@ -57,10 +57,12 @@
         ],
         "lint": [
             "pint --parallel",
+            "rector process --ansi",
             "phpstan analyse --memory-limit=256M"
         ],
         "lint:check": [
             "pint --parallel --test",
+            "rector process --dry-run --ansi",
             "phpstan analyse --memory-limit=256M"
         ],
         "ci:check": [
