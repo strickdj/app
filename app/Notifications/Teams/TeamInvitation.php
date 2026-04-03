@@ -3,6 +3,7 @@
 namespace App\Notifications\Teams;
 
 use App\Models\TeamInvitation as TeamInvitationModel;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -36,6 +37,7 @@ class TeamInvitation extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $team = $this->invitation->team;
+        /** @var User $inviter */
         $inviter = $this->invitation->inviter;
 
         return (new MailMessage)

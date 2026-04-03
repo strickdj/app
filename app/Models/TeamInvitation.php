@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TeamRole;
+use Carbon\Carbon;
 use Database\Factories\TeamInvitationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
+/**
+ * @property Carbon|null $expires_at
+ * @property TeamRole $role
+ */
 #[Fillable(['team_id', 'email', 'role', 'invited_by', 'expires_at', 'accepted_at'])]
 class TeamInvitation extends Model
 {
@@ -43,7 +48,7 @@ class TeamInvitation extends Model
     /**
      * Get the user who sent the invitation.
      *
-     * @return BelongsTo<Model, $this>
+     * @return BelongsTo<User, $this>
      */
     public function inviter(): BelongsTo
     {
