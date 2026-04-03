@@ -169,4 +169,7 @@
     body {
         @apply bg-background text-foreground;
     }
+    #app {
+        @apply h-full; /* feel free to add more classes */
+    }
 }
