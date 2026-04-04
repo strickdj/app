@@ -29,12 +29,16 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (Throwable $exception, Request $request) {
-            if ($request->expectsJson() || app()->environment('local')
+            if ($request->expectsJson() || app()->environment(['local'])
             ) {
                 return null;
             }
 
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
+
+            if ($status !== 404 && app()->environment(['local', 'testing'])) {
+                return null;
+            }
 
             if ($status === 419) {
                 return back()->with('message', 'The page expired, please try again.');
