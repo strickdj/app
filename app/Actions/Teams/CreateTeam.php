@@ -6,11 +6,14 @@ use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class CreateTeam
 {
     /**
      * Create a new team and add the user as owner.
+     *
+     * @throws Throwable
      */
     public function handle(User $user, string $name, bool $isPersonal = false): Team
     {
@@ -20,7 +23,7 @@ class CreateTeam
                 'is_personal' => $isPersonal,
             ]);
 
-            $membership = $team->memberships()->create([
+            $team->memberships()->create([
                 'user_id' => $user->id,
                 'role' => TeamRole::Owner,
             ]);
