@@ -17,6 +17,9 @@ class UserController extends Controller
      */
     public function index(Request $request): Response
     {
+        $perPage = $request->integer('page.size', 10);
+        $currentPage = $request->integer('page.number', 1);
+
         $users = QueryBuilder::for(User::class)
             ->allowedFilters(
                 AllowedFilter::callback('search', function (Builder $query, mixed $value): void {
@@ -35,7 +38,7 @@ class UserController extends Controller
             )
             ->allowedSorts('name', 'email', 'created_at')
             ->with('teams')
-            ->paginate($request->integer('page.size', 10))
+            ->paginate($perPage, page: $currentPage)
             ->withQueryString();
 
         $rawSort = (string) $request->input('sort', '');
@@ -46,7 +49,8 @@ class UserController extends Controller
                 'search' => (string) $request->input('filter.search', ''),
                 'sort' => ltrim($rawSort, '-'),
                 'direction' => str_starts_with($rawSort, '-') ? 'desc' : 'asc',
-                'per_page' => $request->integer('page.size', 10),
+                'per_page' => $perPage,
+                'page' => $currentPage,
             ],
         ]);
     }

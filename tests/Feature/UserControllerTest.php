@@ -108,3 +108,19 @@ test('filters prop is normalized for frontend consumption', function (): void {
             ->where('filters.per_page', 25)
         );
 });
+
+test('requested page number is applied to paginated users results', function (): void {
+    $user = User::factory()->create();
+
+    User::factory()->count(25)->create();
+
+    $this->actingAs($user)
+        ->get(route('users', ['current_team' => $user->currentTeam]).'?page[size]=10&page[number]=2')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('users.current_page', 2)
+            ->has('users.data', 10)
+            ->where('filters.page', 2)
+            ->where('filters.per_page', 10)
+        );
+});

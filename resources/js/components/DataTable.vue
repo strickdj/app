@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import {
+    FlexRender,
+    getCoreRowModel,
+    useVueTable,
+} from '@tanstack/vue-table';
+import type { ColumnDef } from '@tanstack/vue-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
@@ -86,6 +92,16 @@ const columns = computed<string[]>(() => {
 
 const displayColumns = computed<string[]>(() => {
     return columns.value.length > 0 ? columns.value : ['items'];
+});
+
+const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
+    return displayColumns.value.map((column) => ({
+        id: column,
+        accessorFn: (row) => row[column],
+        enableSorting: isColumnSortable(column),
+        header: formatColumnLabel(column),
+        cell: ({ getValue }) => formatCellValue(getValue()),
+    }));
 });
 
 const totalItems = computed<number>(() => {
@@ -272,6 +288,18 @@ const isColumnSortable = (column: string): boolean => {
     return false;
 };
 
+const table = useVueTable<DataTableRow>({
+    get data() {
+        return rows.value;
+    },
+    get columns() {
+        return columnDefinitions.value;
+    },
+    getRowId: (originalRow, index) => String(rowKey(originalRow, index)),
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+});
+
 const onSortColumn = (column: string) => {
     if (!isColumnSortable(column)) {
         return;
@@ -314,30 +342,42 @@ const onSortColumn = (column: string) => {
                 Showing {{ rows.length }} of {{ totalItems }} items.
             </TableCaption>
             <TableHeader>
-                <TableRow>
+                <TableRow
+                    v-for="headerGroup in table.getHeaderGroups()"
+                    :key="headerGroup.id"
+                >
                     <TableHead
-                        v-for="column in displayColumns"
-                        :key="column"
+                        v-for="header in headerGroup.headers"
+                        :key="header.id"
                         :class="
-                            isColumnSortable(column)
+                            !header.isPlaceholder && header.column.getCanSort()
                                 ? 'cursor-pointer select-none'
                                 : ''
                         "
-                        @click="onSortColumn(column)"
+                        @click="
+                            !header.isPlaceholder &&
+                            onSortColumn(header.column.id)
+                        "
                     >
-                        <span class="flex items-center gap-1">
-                            {{ formatColumnLabel(column) }}
-                            <template v-if="isColumnSortable(column)">
+                        <span
+                            v-if="!header.isPlaceholder"
+                            class="flex items-center gap-1"
+                        >
+                            <FlexRender
+                                :render="header.column.columnDef.header"
+                                :props="header.getContext()"
+                            />
+                            <template v-if="header.column.getCanSort()">
                                 <ArrowUp
                                     v-if="
-                                        filters?.sort === column &&
+                                        filters?.sort === header.column.id &&
                                         filters?.direction === 'asc'
                                     "
                                     class="size-3.5 shrink-0"
                                 />
                                 <ArrowDown
                                     v-else-if="
-                                        filters?.sort === column &&
+                                        filters?.sort === header.column.id &&
                                         filters?.direction === 'desc'
                                     "
                                     class="size-3.5 shrink-0"
@@ -352,7 +392,7 @@ const onSortColumn = (column: string) => {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                <TableRow v-if="rows.length === 0">
+                <TableRow v-if="table.getRowModel().rows.length === 0">
                     <TableCell
                         :colspan="displayColumns.length"
                         class="text-center text-muted-foreground"
@@ -361,16 +401,19 @@ const onSortColumn = (column: string) => {
                     </TableCell>
                 </TableRow>
                 <TableRow
-                    v-for="(row, index) in rows"
+                    v-for="row in table.getRowModel().rows"
                     v-else
-                    :key="rowKey(row, index)"
+                    :key="row.id"
                 >
                     <TableCell
-                        v-for="column in columns"
-                        :key="`${rowKey(row, index)}-${column}`"
+                        v-for="cell in row.getVisibleCells()"
+                        :key="cell.id"
                         class="align-top"
                     >
-                        {{ formatCellValue(row[column]) }}
+                        <FlexRender
+                            :render="cell.column.columnDef.cell"
+                            :props="cell.getContext()"
+                        />
                     </TableCell>
                 </TableRow>
             </TableBody>
