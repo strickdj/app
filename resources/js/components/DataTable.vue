@@ -34,9 +34,20 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { formatDateValue } from '@/lib/date';
 import type { TableFilters } from '@/lib/toApiFilters';
 
 type DataTableRow = Record<string, unknown>;
+type DataTableColumn = {
+    key: string;
+    label?: string;
+    formatter?: (
+        value: unknown,
+        row: DataTableRow,
+        column: DataTableColumn,
+    ) => string;
+};
+
 type PaginatedItems = {
     data?: DataTableRow[] | null;
     total?: number;
@@ -48,7 +59,7 @@ type PaginatedItems = {
 const props = withDefaults(
     defineProps<{
         items?: DataTableRow[] | PaginatedItems;
-        columns?: string[];
+        columns?: DataTableColumn[];
         filters?: TableFilters;
         searchable?: boolean;
         sortable?: boolean | string[];
@@ -78,11 +89,11 @@ const rows = computed<DataTableRow[]>(() => {
     return [];
 });
 
-const inferredColumns = computed<string[]>(() => {
-    return Object.keys(rows.value[0] ?? {});
+const inferredColumns = computed<DataTableColumn[]>(() => {
+    return Object.keys(rows.value[0] ?? {}).map((key) => ({ key }));
 });
 
-const columns = computed<string[]>(() => {
+const columns = computed<DataTableColumn[]>(() => {
     if (props.columns.length > 0) {
         return props.columns;
     }
@@ -90,18 +101,8 @@ const columns = computed<string[]>(() => {
     return inferredColumns.value;
 });
 
-const displayColumns = computed<string[]>(() => {
-    return columns.value.length > 0 ? columns.value : ['items'];
-});
-
-const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
-    return displayColumns.value.map((column) => ({
-        id: column,
-        accessorFn: (row) => row[column],
-        enableSorting: isColumnSortable(column),
-        header: formatColumnLabel(column),
-        cell: ({ getValue }) => formatCellValue(getValue()),
-    }));
+const displayColumns = computed<DataTableColumn[]>(() => {
+    return columns.value.length > 0 ? columns.value : [{ key: 'items' }];
 });
 
 const totalItems = computed<number>(() => {
@@ -172,9 +173,23 @@ const formatObjectValue = (value: Record<string, unknown>): string => {
     return JSON.stringify(value) ?? '—';
 };
 
-const formatCellValue = (value: unknown): string => {
+const formatCellValue = (
+    value: unknown,
+    column: DataTableColumn,
+    row: DataTableRow,
+): string => {
     if (value === null || value === undefined || value === '') {
         return '—';
+    }
+
+    if (column.formatter) {
+        return column.formatter(value, row, column);
+    }
+
+    const formattedDateValue = formatDateValue(value, column.key);
+
+    if (formattedDateValue !== null) {
+        return formattedDateValue;
     }
 
     if (Array.isArray(value)) {
@@ -288,10 +303,31 @@ const isColumnSortable = (column: string): boolean => {
     return false;
 };
 
+const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
+    return displayColumns.value.map((column) => ({
+        id: column.key,
+        accessorFn: (row) => row[column.key],
+        enableSorting: isColumnSortable(column.key),
+        header: column.label ?? formatColumnLabel(column.key),
+        cell: ({ getValue, row }) =>
+            formatCellValue(getValue(), column, row.original),
+    }));
+});
+
+const headerGroups = computed(() => {
+    void columnDefinitions.value;
+
+    return table.getHeaderGroups();
+});
+
+const tableRows = computed(() => {
+    void rows.value;
+
+    return table.getRowModel().rows;
+});
+
 const table = useVueTable<DataTableRow>({
-    get data() {
-        return rows.value;
-    },
+    data: rows,
     get columns() {
         return columnDefinitions.value;
     },
@@ -343,7 +379,7 @@ const onSortColumn = (column: string) => {
             </TableCaption>
             <TableHeader>
                 <TableRow
-                    v-for="headerGroup in table.getHeaderGroups()"
+                    v-for="headerGroup in headerGroups"
                     :key="headerGroup.id"
                 >
                     <TableHead
@@ -392,7 +428,7 @@ const onSortColumn = (column: string) => {
                 </TableRow>
             </TableHeader>
             <TableBody>
-                <TableRow v-if="table.getRowModel().rows.length === 0">
+                <TableRow v-if="tableRows.length === 0">
                     <TableCell
                         :colspan="displayColumns.length"
                         class="text-center text-muted-foreground"
@@ -401,7 +437,7 @@ const onSortColumn = (column: string) => {
                     </TableCell>
                 </TableRow>
                 <TableRow
-                    v-for="row in table.getRowModel().rows"
+                    v-for="row in tableRows"
                     v-else
                     :key="row.id"
                 >

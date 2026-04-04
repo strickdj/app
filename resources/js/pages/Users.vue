@@ -3,6 +3,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { index } from '@/actions/App/Http/Controllers/UserController';
 import DataTable from '@/components/DataTable.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatDateTime, parseDateValue } from '@/lib/date';
 import { toApiFilters } from '@/lib/toApiFilters';
 import type { TableFilters } from '@/lib/toApiFilters';
 import { dashboard } from '@/routes';
@@ -24,7 +25,26 @@ type Props = {
 
 const props = defineProps<Props>();
 
-const userTableColumns = ['id', 'name', 'email', 'teams', 'created_at'];
+const userTableColumns = [
+    { key: 'id' },
+    { key: 'name' },
+    { key: 'email' },
+    { key: 'teams' },
+    {
+        key: 'created_at',
+        formatter: (value: unknown): string => {
+            const date = parseDateValue(value);
+
+            if (!date) {
+                return value === null || value === undefined || value === ''
+                    ? '—'
+                    : String(value);
+            }
+
+            return formatDateTime(date);
+        },
+    },
+];
 
 const handleFiltersUpdate = (filters: TableFilters): void => {
     if (!props.currentTeam) {
