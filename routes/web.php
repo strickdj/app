@@ -18,7 +18,6 @@ Route::prefix('{current_team}')
         Route::inertia('users', 'Users')->name('dashboard');
         Route::get('users', function () {
             $users = User::with(['teams'])
-//                ->withPivot('role')
                 ->paginate();
 
             return Inertia::render('Users', [

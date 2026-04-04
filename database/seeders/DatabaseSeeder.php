@@ -32,6 +32,6 @@ class DatabaseSeeder extends Seeder
                 'password' => '\$2y\$12\$ymoXJ2hJJfG9wVg4u7FA6erAxY6BWGChrEizXcPYMRHHIrQpC1Ob.',
             ]);
 
-        User::factory(10)->create();
+        User::factory(25)->create();
     }
 }
