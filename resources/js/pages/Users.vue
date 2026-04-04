@@ -12,20 +12,24 @@ defineOptions({
             breadcrumbs: [
                 {
                     title: 'Dashboard',
-                    href: props.currentTeam ? dashboard(props.currentTeam.slug) : '/',
+                    href: props.currentTeam
+                        ? dashboard(props.currentTeam.slug)
+                        : '/',
                 },
             ],
-        }
+        },
     ],
 });
+const myfunc = ($page) => {
+    console.log($page);
+};
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Users" />
 
-    <div
-        class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
+    <button @click="myfunc($page)">Hi</button>
+    <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <DataTable />
     </div>
 </template>

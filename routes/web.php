@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
 Route::inertia('/', 'Welcome', [
@@ -13,6 +15,17 @@ Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function (): void {
         Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+        Route::inertia('users', 'Users')->name('dashboard');
+        Route::get('users', function () {
+            $users = User::with(['teams'])
+//                ->withPivot('role')
+                ->paginate();
+
+            return Inertia::render('Users', [
+                'users' => $users,
+            ]);
+        })->name('users');
+
     });
 
 Route::middleware(['auth'])->group(function (): void {
