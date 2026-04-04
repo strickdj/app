@@ -24,7 +24,7 @@ type Props = {
 
 const props = defineProps<Props>();
 
-const userTableColumns = ['id', 'name', 'email', 'teams'];
+const userTableColumns = ['id', 'name', 'email', 'teams', 'created_at'];
 
 const handleFiltersUpdate = (filters: TableFilters): void => {
     if (!props.currentTeam) {

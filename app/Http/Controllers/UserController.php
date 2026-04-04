@@ -35,7 +35,7 @@ class UserController extends Controller
             )
             ->allowedSorts('name', 'email', 'created_at')
             ->with('teams')
-            ->paginate($request->integer('page.size', 15))
+            ->paginate($request->integer('page.size', 10))
             ->withQueryString();
 
         $rawSort = (string) $request->input('sort', '');
@@ -46,7 +46,7 @@ class UserController extends Controller
                 'search' => (string) $request->input('filter.search', ''),
                 'sort' => ltrim($rawSort, '-'),
                 'direction' => str_starts_with($rawSort, '-') ? 'desc' : 'asc',
-                'per_page' => $request->integer('page.size', 15),
+                'per_page' => $request->integer('page.size', 10),
             ],
         ]);
     }

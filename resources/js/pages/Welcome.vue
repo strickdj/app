@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { Dialog, DialogPanel } from '@headlessui/vue';
 import { Bars3Icon, XMarkIcon } from '@heroicons/vue/24/outline';
-import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { dashboard, login, register } from '@/routes';
+import { login } from '@/routes';
 
 withDefaults(
     defineProps<{
@@ -15,10 +14,6 @@ withDefaults(
     },
 );
 
-// const page = usePage();
-// const dashboardUrl = computed(() =>
-//     page.props.currentTeam ? dashboard(page.props.currentTeam.slug).url : '/',
-// );
 
 const navigation = [
     { name: 'Product', href: '#' },
