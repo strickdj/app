@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useRemember } from '@inertiajs/vue3';
+import type { RowSelectionState } from '@tanstack/vue-table';
 import { index } from '@/actions/App/Http/Controllers/UserController';
 import DataTable from '@/components/DataTable.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -24,6 +25,10 @@ type Props = {
 };
 
 const props = defineProps<Props>();
+const rowSelection = useRemember<RowSelectionState>(
+    {},
+    `users.${props.currentTeam?.slug ?? 'default'}.row-selection`,
+);
 
 const userTableColumns = [
     { key: 'id' },
@@ -81,11 +86,13 @@ defineOptions({
 
     <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <DataTable
+            v-model:rowSelection="rowSelection"
             :items="users"
             :columns="userTableColumns"
             :filters="filters"
             :searchable="true"
             :sortable="['name', 'email', 'created_at']"
+            :selectable="true"
             @update:filters="handleFiltersUpdate"
         />
     </div>

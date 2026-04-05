@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { FlexRender, getCoreRowModel, useVueTable } from '@tanstack/vue-table';
-import type { ColumnDef } from '@tanstack/vue-table';
+import type {
+    CellContext,
+    ColumnDef,
+    HeaderContext,
+    RowSelectionState,
+    Updater,
+} from '@tanstack/vue-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, h, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
     Pagination,
@@ -52,25 +59,31 @@ type PaginatedItems = {
     per_page?: number;
 };
 
-const props = withDefaults(
-    defineProps<{
-        items?: DataTableRow[] | PaginatedItems;
-        columns?: DataTableColumn[];
-        filters?: TableFilters;
-        searchable?: boolean;
-        sortable?: boolean | string[];
-    }>(),
-    {
-        items: () => [],
-        columns: () => [],
-        filters: () => ({}),
-        searchable: false,
-        sortable: false,
-    },
-);
+type BaseProps = {
+    items?: DataTableRow[] | PaginatedItems;
+    columns?: DataTableColumn[];
+    filters?: TableFilters;
+    searchable?: boolean;
+    sortable?: boolean | string[];
+};
+
+type SelectionProps =
+    | { selectable: true; rowSelection: RowSelectionState }
+    | { selectable?: false; rowSelection?: never };
+
+const props = withDefaults(defineProps<BaseProps & SelectionProps>(), {
+    items: () => [],
+    columns: () => [],
+    filters: () => ({}),
+    searchable: false,
+    sortable: false,
+    selectable: false,
+});
 
 const emit = defineEmits<{
     'update:filters': [filters: TableFilters];
+    'update:rowSelection': [rowSelection: RowSelectionState];
+    'update:selectedRowIds': [rowIds: string[]];
 }>();
 
 const rows = computed<DataTableRow[]>(() => {
@@ -99,6 +112,10 @@ const columns = computed<DataTableColumn[]>(() => {
 
 const displayColumns = computed<DataTableColumn[]>(() => {
     return columns.value.length > 0 ? columns.value : [{ key: 'items' }];
+});
+
+const renderedColumnCount = computed<number>(() => {
+    return displayColumns.value.length + (props.selectable ? 1 : 0);
 });
 
 const totalItems = computed<number>(() => {
@@ -221,6 +238,21 @@ const rowKey = (row: DataTableRow, index: number): string | number => {
     return index;
 };
 
+const controlledRowSelection = computed<RowSelectionState>(() => {
+    return props.selectable ? props.rowSelection : {};
+});
+
+const applyRowSelection = (selection: RowSelectionState): void => {
+    console.log('Applying row selection:', selection);
+    emit('update:rowSelection', selection);
+
+    const selectedRowIds = Object.entries(selection)
+        .filter(([, isSelected]) => Boolean(isSelected))
+        .map(([id]) => id);
+
+    emit('update:selectedRowIds', selectedRowIds);
+};
+
 const searchInput = ref(props.filters?.search ?? '');
 
 watch(
@@ -300,14 +332,50 @@ const isColumnSortable = (column: string): boolean => {
 };
 
 const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
-    return displayColumns.value.map((column) => ({
+    const baseColumns = displayColumns.value.map((column) => ({
         id: column.key,
-        accessorFn: (row) => row[column.key],
+        accessorFn: (row: DataTableRow) => row[column.key],
         enableSorting: isColumnSortable(column.key),
         header: column.label ?? formatColumnLabel(column.key),
-        cell: ({ getValue, row }) =>
+        cell: ({ getValue, row }: CellContext<DataTableRow, unknown>) =>
             formatCellValue(getValue(), column, row.original),
     }));
+
+    if (!props.selectable) {
+        return baseColumns;
+    }
+
+    return [
+        {
+            id: '__select',
+            enableSorting: false,
+            header: ({ table }: HeaderContext<DataTableRow, unknown>) =>
+                h(Checkbox, {
+                    modelValue: table.getIsAllPageRowsSelected()
+                        ? true
+                        : table.getIsSomePageRowsSelected()
+                          ? 'indeterminate'
+                          : false,
+                    'aria-label': 'Select all rows',
+                    'onUpdate:modelValue': (
+                        value: boolean | 'indeterminate',
+                    ) => {
+                        table.toggleAllPageRowsSelected(Boolean(value));
+                    },
+                }),
+            cell: ({ row }: CellContext<DataTableRow, unknown>) =>
+                h(Checkbox, {
+                    modelValue: row.getIsSelected(),
+                    'aria-label': 'Select row',
+                    'onUpdate:modelValue': (
+                        value: boolean | 'indeterminate',
+                    ) => {
+                        row.toggleSelected(Boolean(value));
+                    },
+                }),
+        },
+        ...baseColumns,
+    ];
 });
 
 const table = useVueTable<DataTableRow>({
@@ -318,6 +386,21 @@ const table = useVueTable<DataTableRow>({
     getRowId: (originalRow, index) => String(rowKey(originalRow, index)),
     getCoreRowModel: getCoreRowModel(),
     manualSorting: true,
+    enableRowSelection: () => props.selectable,
+    manualPagination: true,
+    onRowSelectionChange: (updater: Updater<RowSelectionState>) => {
+        const nextSelection =
+            typeof updater === 'function'
+                ? updater(controlledRowSelection.value)
+                : updater;
+
+        applyRowSelection(nextSelection);
+    },
+    state: {
+        get rowSelection() {
+            return controlledRowSelection.value;
+        },
+    },
 });
 
 const headerGroups = ref(table.getHeaderGroups());
@@ -440,13 +523,18 @@ const onSortColumn = (column: string): void => {
             <TableBody>
                 <TableRow v-if="tableRows.length === 0">
                     <TableCell
-                        :colspan="displayColumns.length"
+                        :colspan="renderedColumnCount"
                         class="text-center text-muted-foreground"
                     >
                         No items found.
                     </TableCell>
                 </TableRow>
-                <TableRow v-for="row in tableRows" v-else :key="row.id">
+                <TableRow
+                    v-for="row in tableRows"
+                    v-else
+                    :key="row.id"
+                    :data-state="row.getIsSelected() ? 'selected' : undefined"
+                >
                     <TableCell
                         v-for="cell in row.getVisibleCells()"
                         :key="cell.id"
@@ -461,16 +549,13 @@ const onSortColumn = (column: string): void => {
             </TableBody>
             <TableFooter>
                 <TableRow>
-                    <TableCell v-if="displayColumns.length === 1">
+                    <TableCell v-if="renderedColumnCount === 1">
                         Total: {{ totalItems }}
                     </TableCell>
-                    <TableCell v-else :colspan="displayColumns.length - 1">
+                    <TableCell v-else :colspan="renderedColumnCount - 1">
                         Total
                     </TableCell>
-                    <TableCell
-                        v-if="displayColumns.length > 1"
-                        class="text-right"
-                    >
+                    <TableCell v-if="renderedColumnCount > 1" class="text-right">
                         {{ totalItems }}
                     </TableCell>
                 </TableRow>
