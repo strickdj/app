@@ -8,7 +8,7 @@ import { formatDateTime, parseDateValue } from '@/lib/date';
 import { toApiFilters } from '@/lib/toApiFilters';
 import type { TableFilters } from '@/lib/toApiFilters';
 import { dashboard } from '@/routes';
-import type { Team, User } from '@/types';
+import type { DataTableColumn, Team, User } from '@/types';
 
 type PaginatedItems<T> = {
     data: T[];
@@ -30,13 +30,14 @@ const rowSelection = useRemember<RowSelectionState>(
     `users.${props.currentTeam?.slug ?? 'default'}.row-selection`,
 );
 
-const userTableColumns = [
+const userTableColumns: DataTableColumn[] = [
     { key: 'id' },
-    { key: 'name' },
-    { key: 'email' },
+    { key: 'name', sortable: true },
+    { key: 'email', sortable: true },
     { key: 'teams' },
     {
         key: 'created_at',
+        sortable: true,
         formatter: (value: unknown): string => {
             const date = parseDateValue(value);
 
@@ -91,7 +92,6 @@ defineOptions({
             :columns="userTableColumns"
             :filters="filters"
             :searchable="true"
-            :sortable="['name', 'email', 'created_at']"
             :selectable="true"
             @update:filters="handleFiltersUpdate"
         />

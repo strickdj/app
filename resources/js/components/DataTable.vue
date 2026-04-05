@@ -39,17 +39,7 @@ import {
 } from '@/components/ui/table';
 import { formatDateValue } from '@/lib/date';
 import type { TableFilters } from '@/lib/toApiFilters';
-
-type DataTableRow = Record<string, unknown>;
-type DataTableColumn = {
-    key: string;
-    label?: string;
-    formatter?: (
-        value: unknown,
-        row: DataTableRow,
-        column: DataTableColumn,
-    ) => string;
-};
+import type { DataTableColumn, DataTableRow } from '@/types';
 
 type PaginatedItems = {
     data?: DataTableRow[] | null;
@@ -64,7 +54,6 @@ type BaseProps = {
     columns?: DataTableColumn[];
     filters?: TableFilters;
     searchable?: boolean;
-    sortable?: boolean | string[];
 };
 
 type SelectionProps =
@@ -76,7 +65,6 @@ const props = withDefaults(defineProps<BaseProps & SelectionProps>(), {
     columns: () => [],
     filters: () => ({}),
     searchable: false,
-    sortable: false,
     selectable: false,
 });
 
@@ -243,7 +231,6 @@ const controlledRowSelection = computed<RowSelectionState>(() => {
 });
 
 const applyRowSelection = (selection: RowSelectionState): void => {
-    console.log('Applying row selection:', selection);
     emit('update:rowSelection', selection);
 
     const selectedRowIds = Object.entries(selection)
@@ -319,23 +306,15 @@ const goToPage = (page: number): void => {
     });
 };
 
-const isColumnSortable = (column: string): boolean => {
-    if (props.sortable === true) {
-        return true;
-    }
-
-    if (Array.isArray(props.sortable)) {
-        return props.sortable.includes(column);
-    }
-
-    return false;
+const isColumnSortable = (column: DataTableColumn): boolean => {
+    return column.sortable === true;
 };
 
 const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
     const baseColumns = displayColumns.value.map((column) => ({
         id: column.key,
         accessorFn: (row: DataTableRow) => row[column.key],
-        enableSorting: isColumnSortable(column.key),
+        enableSorting: isColumnSortable(column),
         header: column.label ?? formatColumnLabel(column.key),
         cell: ({ getValue, row }: CellContext<DataTableRow, unknown>) =>
             formatCellValue(getValue(), column, row.original),
@@ -429,7 +408,11 @@ const getSortDirection = (
 };
 
 const onSortColumn = (column: string): void => {
-    if (!isColumnSortable(column)) {
+    const sortableColumn = displayColumns.value.find(
+        (displayColumn) => displayColumn.key === column,
+    );
+
+    if (!sortableColumn || !isColumnSortable(sortableColumn)) {
         return;
     }
 
@@ -555,7 +538,10 @@ const onSortColumn = (column: string): void => {
                     <TableCell v-else :colspan="renderedColumnCount - 1">
                         Total
                     </TableCell>
-                    <TableCell v-if="renderedColumnCount > 1" class="text-right">
+                    <TableCell
+                        v-if="renderedColumnCount > 1"
+                        class="text-right"
+                    >
                         {{ totalItems }}
                     </TableCell>
                 </TableRow>
