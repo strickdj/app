@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="TRow extends DataTableRow = DataTableRow">
+<script setup lang="ts" generic="TRow extends DataTableRow">
 import { FlexRender, getCoreRowModel, useVueTable } from '@tanstack/vue-table';
 import type {
     CellContext,
@@ -61,7 +61,7 @@ type BaseProps = {
 };
 
 type SelectionProps =
-    | { selectable: true; rowSelection: RowSelectionState }
+    | { selectable: true; rowSelection?: RowSelectionState }
     | { selectable?: false; rowSelection?: never };
 
 const props = withDefaults(defineProps<BaseProps & SelectionProps>(), {
@@ -200,11 +200,39 @@ const rowKey = (row: TRow, index: number): string | number => {
     return index;
 };
 
-const controlledRowSelection = computed<RowSelectionState>(() => {
-    return props.selectable ? props.rowSelection : {};
+const localRowSelection = ref<RowSelectionState>({});
+
+const isControlledRowSelection = computed<boolean>(() => {
+    return props.selectable && props.rowSelection !== undefined;
 });
 
+const currentRowSelection = computed<RowSelectionState>(() => {
+    if (!props.selectable) {
+        return {};
+    }
+
+    return props.rowSelection ?? localRowSelection.value;
+});
+
+const hasDifferentSelection = (
+    first: RowSelectionState,
+    second: RowSelectionState,
+): boolean => {
+    const firstKeys = Object.keys(first);
+    const secondKeys = Object.keys(second);
+
+    if (firstKeys.length !== secondKeys.length) {
+        return true;
+    }
+
+    return firstKeys.some((key) => first[key] !== second[key]);
+};
+
 const applyRowSelection = (selection: RowSelectionState): void => {
+    if (!isControlledRowSelection.value) {
+        localRowSelection.value = selection;
+    }
+
     emit('update:rowSelection', selection);
 
     const selectedRowIds = Object.entries(selection)
@@ -213,6 +241,30 @@ const applyRowSelection = (selection: RowSelectionState): void => {
 
     emit('update:selectedRowIds', selectedRowIds);
 };
+
+watch(
+    rows,
+    (currentRows) => {
+        if (!props.selectable || isControlledRowSelection.value) {
+            return;
+        }
+
+        const visibleRowIds = new Set(
+            currentRows.map((row, index) => String(rowKey(row, index))),
+        );
+
+        const nextSelection = Object.fromEntries(
+            Object.entries(localRowSelection.value).filter(
+                ([id, isSelected]) => Boolean(isSelected) && visibleRowIds.has(id),
+            ),
+        );
+
+        if (hasDifferentSelection(localRowSelection.value, nextSelection)) {
+            applyRowSelection(nextSelection);
+        }
+    },
+    { immediate: true },
+);
 
 const searchInput = ref(props.filters?.search ?? '');
 
@@ -354,14 +406,14 @@ const table = useVueTable<TRow>({
     onRowSelectionChange: (updater: Updater<RowSelectionState>) => {
         const nextSelection =
             typeof updater === 'function'
-                ? updater(controlledRowSelection.value)
+                ? updater(currentRowSelection.value)
                 : updater;
 
         applyRowSelection(nextSelection);
     },
     state: {
         get rowSelection() {
-            return controlledRowSelection.value;
+            return currentRowSelection.value;
         },
     },
 });
@@ -373,7 +425,7 @@ watch(columnDefinitions, () => {
     headerGroups.value = table.getHeaderGroups();
 });
 
-watch([rows, columnDefinitions], () => {
+watch([rows, columnDefinitions, currentRowSelection], () => {
     tableRows.value = table.getRowModel().rows;
 });
 
