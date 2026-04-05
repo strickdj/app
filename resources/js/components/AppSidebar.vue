@@ -16,7 +16,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { dashboard, users } from '@/routes';
 import type { NavItem } from '@/types';
 
 const page = usePage();
@@ -25,10 +25,18 @@ const dashboardUrl = computed(() =>
     page.props.currentTeam ? dashboard(page.props.currentTeam.slug).url : '/',
 );
 
+const usersUrl = computed(() =>
+    page.props.currentTeam ? users(page.props.currentTeam.slug).url : '/',
+);
 const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Dashboard',
         href: dashboardUrl.value,
+        icon: LayoutGrid,
+    },
+    {
+        title: 'Users',
+        href: usersUrl.value,
         icon: LayoutGrid,
     },
 ]);
