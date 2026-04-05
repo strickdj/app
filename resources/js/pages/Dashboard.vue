@@ -12,10 +12,12 @@ defineOptions({
             breadcrumbs: [
                 {
                     title: 'Dashboard',
-                    href: props.currentTeam ? dashboard(props.currentTeam.slug) : '/',
+                    href: props.currentTeam
+                        ? dashboard(props.currentTeam.slug)
+                        : '/',
                 },
             ],
-        }
+        },
     ],
 });
 </script>
@@ -23,9 +25,7 @@ defineOptions({
 <template>
     <Head title="Dashboard" />
 
-    <div
-        class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
+    <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <DataTable />
     </div>
 </template>

@@ -30,4 +30,3 @@ export function toApiFilters(filters: TableFilters): FlatParams {
 
     return params;
 }
-

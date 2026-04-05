@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-    FlexRender,
-    getCoreRowModel,
-    useVueTable,
-} from '@tanstack/vue-table';
+import { FlexRender, getCoreRowModel, useVueTable } from '@tanstack/vue-table';
 import type { ColumnDef } from '@tanstack/vue-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
@@ -314,18 +310,6 @@ const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
     }));
 });
 
-const headerGroups = computed(() => {
-    void columnDefinitions.value;
-
-    return table.getHeaderGroups();
-});
-
-const tableRows = computed(() => {
-    void rows.value;
-
-    return table.getRowModel().rows;
-});
-
 const table = useVueTable<DataTableRow>({
     data: rows,
     get columns() {
@@ -336,18 +320,44 @@ const table = useVueTable<DataTableRow>({
     manualSorting: true,
 });
 
-const onSortColumn = (column: string) => {
+const headerGroups = ref(table.getHeaderGroups());
+const tableRows = ref(table.getRowModel().rows);
+
+watch(columnDefinitions, () => {
+    headerGroups.value = table.getHeaderGroups();
+});
+
+watch([rows, columnDefinitions], () => {
+    tableRows.value = table.getRowModel().rows;
+});
+
+const getSortDirection = (
+    direction?: TableFilters['direction'],
+): TableFilters['direction'] => {
+    if (direction === 'asc') {
+        return 'desc';
+    }
+
+    if (direction === 'desc') {
+        return undefined;
+    }
+
+    return 'asc';
+};
+
+const onSortColumn = (column: string): void => {
     if (!isColumnSortable(column)) {
         return;
     }
 
     const isSameColumn = props.filters?.sort === column;
-    const newDirection =
-        isSameColumn && props.filters?.direction === 'asc' ? 'desc' : 'asc';
+    const newDirection = isSameColumn
+        ? getSortDirection(props.filters?.direction)
+        : 'asc';
 
     emit('update:filters', {
         ...props.filters,
-        sort: column,
+        sort: newDirection ? column : undefined,
         direction: newDirection,
         page: 1,
     });
@@ -436,11 +446,7 @@ const onSortColumn = (column: string) => {
                         No items found.
                     </TableCell>
                 </TableRow>
-                <TableRow
-                    v-for="row in tableRows"
-                    v-else
-                    :key="row.id"
-                >
+                <TableRow v-for="row in tableRows" v-else :key="row.id">
                     <TableCell
                         v-for="cell in row.getVisibleCells()"
                         :key="cell.id"
