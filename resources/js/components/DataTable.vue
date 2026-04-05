@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="TRow extends DataTableRow = DataTableRow">
 import { FlexRender, getCoreRowModel, useVueTable } from '@tanstack/vue-table';
 import type {
     CellContext,
@@ -38,10 +38,15 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import type { TableFilters } from '@/lib/toApiFilters';
-import type { DataTableColumn, DataTableRow } from '@/types';
+import type {
+    DataTableColumn,
+    DataTableColumnKey,
+    DataTableColumns,
+    DataTableRow,
+} from '@/types';
 
 type PaginatedItems = {
-    data?: DataTableRow[] | null;
+    data?: TRow[] | null;
     total?: number;
     current_page?: number;
     last_page?: number;
@@ -49,8 +54,8 @@ type PaginatedItems = {
 };
 
 type BaseProps = {
-    items?: DataTableRow[] | PaginatedItems;
-    columns?: DataTableColumn[];
+    items?: TRow[] | PaginatedItems;
+    columns?: DataTableColumns<DataTableRow>;
     filters?: TableFilters;
     searchable?: boolean;
 };
@@ -73,7 +78,7 @@ const emit = defineEmits<{
     'update:selectedRowIds': [rowIds: string[]];
 }>();
 
-const rows = computed<DataTableRow[]>(() => {
+const rows = computed<TRow[]>(() => {
     if (Array.isArray(props.items)) {
         return props.items;
     }
@@ -85,20 +90,28 @@ const rows = computed<DataTableRow[]>(() => {
     return [];
 });
 
-const inferredColumns = computed<DataTableColumn[]>(() => {
-    return Object.keys(rows.value[0] ?? {}).map((key) => ({ key }));
+const inferredColumns = computed<DataTableColumns<TRow>>(() => {
+    return Object.keys(rows.value[0] ?? {}).map((key) => ({
+        key: key as DataTableColumnKey<TRow>,
+    })) as DataTableColumns<TRow>;
 });
 
-const columns = computed<DataTableColumn[]>(() => {
+const columns = computed<DataTableColumns<TRow>>(() => {
     if (props.columns.length > 0) {
-        return props.columns;
+        return props.columns as DataTableColumns<TRow>;
     }
 
     return inferredColumns.value;
 });
 
-const displayColumns = computed<DataTableColumn[]>(() => {
-    return columns.value.length > 0 ? columns.value : [{ key: 'items' }];
+const displayColumns = computed<DataTableColumns<TRow>>(() => {
+    if (columns.value.length > 0) {
+        return columns.value;
+    }
+
+    return [
+        { key: 'items' as DataTableColumnKey<TRow> },
+    ] as DataTableColumns<TRow>;
 });
 
 const renderedColumnCount = computed<number>(() => {
@@ -161,10 +174,10 @@ const formatColumnLabel = (column: string): string => {
         .replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
-const formatCellValue = (
-    value: unknown,
-    column: DataTableColumn,
-    row: DataTableRow,
+const formatCellValue = <TKey extends DataTableColumnKey<TRow>>(
+    value: TRow[TKey],
+    column: DataTableColumn<TRow, TKey>,
+    row: TRow,
 ): unknown => {
     if (value === null || value === undefined || value === '') {
         return '—';
@@ -177,7 +190,7 @@ const formatCellValue = (
     return value;
 };
 
-const rowKey = (row: DataTableRow, index: number): string | number => {
+const rowKey = (row: TRow, index: number): string | number => {
     const candidate = row.id;
 
     if (typeof candidate === 'string' || typeof candidate === 'number') {
@@ -267,18 +280,28 @@ const goToPage = (page: number): void => {
     });
 };
 
-const isColumnSortable = (column: DataTableColumn): boolean => {
+const isColumnSortable = <TKey extends DataTableColumnKey<TRow>>(
+    column: DataTableColumn<TRow, TKey>,
+): boolean => {
     return column.sortable === true;
 };
 
-const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
-    const baseColumns = displayColumns.value.map((column) => ({
+const createColumnDefinition = <TKey extends DataTableColumnKey<TRow>>(
+    column: DataTableColumn<TRow, TKey>,
+): ColumnDef<TRow> => {
+    return {
         id: column.key,
-        accessorFn: (row: DataTableRow) => row[column.key],
+        accessorFn: (row: TRow): TRow[TKey] => row[column.key],
         enableSorting: isColumnSortable(column),
         header: column.label ?? formatColumnLabel(column.key),
-        cell: ({ getValue, row }: CellContext<DataTableRow, unknown>) =>
-            formatCellValue(getValue(), column, row.original),
+        cell: ({ getValue, row }: CellContext<TRow, TRow[TKey]>) =>
+            formatCellValue(getValue() as TRow[TKey], column, row.original),
+    };
+};
+
+const columnDefinitions = computed<ColumnDef<TRow>[]>(() => {
+    const baseColumns = displayColumns.value.map((column) => ({
+        ...createColumnDefinition(column),
     }));
 
     if (!props.selectable) {
@@ -289,7 +312,7 @@ const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
         {
             id: '__select',
             enableSorting: false,
-            header: ({ table }: HeaderContext<DataTableRow, unknown>) =>
+            header: ({ table }: HeaderContext<TRow, unknown>) =>
                 h(Checkbox, {
                     modelValue: table.getIsAllPageRowsSelected()
                         ? true
@@ -303,7 +326,7 @@ const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
                         table.toggleAllPageRowsSelected(Boolean(value));
                     },
                 }),
-            cell: ({ row }: CellContext<DataTableRow, unknown>) =>
+            cell: ({ row }: CellContext<TRow, unknown>) =>
                 h(Checkbox, {
                     modelValue: row.getIsSelected(),
                     'aria-label': 'Select row',
@@ -318,7 +341,7 @@ const columnDefinitions = computed<ColumnDef<DataTableRow>[]>(() => {
     ];
 });
 
-const table = useVueTable<DataTableRow>({
+const table = useVueTable<TRow>({
     data: rows,
     get columns() {
         return columnDefinitions.value;

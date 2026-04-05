@@ -8,7 +8,8 @@ import { formatDateTime, parseDateValue } from '@/lib/date';
 import { toApiFilters } from '@/lib/toApiFilters';
 import type { TableFilters } from '@/lib/toApiFilters';
 import { dashboard } from '@/routes';
-import type { DataTableColumn, Team, User } from '@/types';
+import type { DataTableColumns, DataTableRow, Team, User } from '@/types';
+import { defineDataTableColumns } from '@/types';
 
 type PaginatedItems<T> = {
     data: T[];
@@ -20,8 +21,12 @@ type PaginatedItems<T> = {
 
 type Props = {
     currentTeam?: Team | null;
-    users: PaginatedItems<User>;
+    users: PaginatedItems<UserTableRow>;
     filters: TableFilters;
+};
+
+type UserTableRow = Pick<User, 'id' | 'name' | 'email' | 'created_at'> & {
+    teams: Team[];
 };
 
 const props = defineProps<Props>();
@@ -30,22 +35,18 @@ const rowSelection = useRemember<RowSelectionState>(
     `users.${props.currentTeam?.slug ?? 'default'}.row-selection`,
 );
 
-const userTableColumns: DataTableColumn[] = [
+const userTableColumns = defineDataTableColumns<UserTableRow>()([
     { key: 'id' },
     { key: 'name', sortable: true },
     { key: 'email', sortable: true },
     {
         key: 'teams',
-        formatter: (value: unknown): string => {
-            const v = value as Team[];
-
-            return v[0].name;
-        }
+        formatter: (value): string => value[0]?.name ?? '—',
     },
     {
         key: 'created_at',
         sortable: true,
-        formatter: (value: unknown): string => {
+        formatter: (value): string => {
             const date = parseDateValue(value);
 
             if (!date) {
@@ -57,7 +58,9 @@ const userTableColumns: DataTableColumn[] = [
             return formatDateTime(date);
         },
     },
-];
+]);
+
+const dataTableColumns: DataTableColumns<DataTableRow> = userTableColumns;
 
 const handleFiltersUpdate = (filters: TableFilters): void => {
     if (!props.currentTeam) {
@@ -96,7 +99,7 @@ defineOptions({
         <DataTable
             v-model:rowSelection="rowSelection"
             :items="users"
-            :columns="userTableColumns"
+            :columns="dataTableColumns"
             :filters="filters"
             :searchable="true"
             :selectable="true"
