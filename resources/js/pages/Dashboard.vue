@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import DataTable from '@/components/DataTable.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { Team } from '@/types';
@@ -26,6 +25,5 @@ defineOptions({
     <Head title="Dashboard" />
 
     <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
-        <DataTable />
     </div>
 </template>

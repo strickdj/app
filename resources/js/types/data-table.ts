@@ -28,6 +28,12 @@ export type DataTableColumns<TRow extends DataTableRow = DataTableRow> =
         }[DataTableColumnKey<TRow>]
     >;
 
+export type DataTableBulkActionsSlotProps = {
+    selectedRowIds: string[];
+    selectedCount: number;
+    clearSelection: () => void;
+};
+
 export const defineDataTableColumns = <TRow extends DataTableRow>() => {
     return <
         const TColumns extends Array<DataTableColumns<TRow>[number]>,

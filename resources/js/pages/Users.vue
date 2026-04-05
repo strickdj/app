@@ -2,6 +2,7 @@
 import { Head, router } from '@inertiajs/vue3';
 import { index } from '@/actions/App/Http/Controllers/UserController';
 import DataTable from '@/components/DataTable.vue';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDateTime, parseDateValue } from '@/lib/date';
 import { toApiFilters } from '@/lib/toApiFilters';
@@ -98,6 +99,22 @@ defineOptions({
             :searchable="true"
             :selectable="true"
             @update:filters="handleFiltersUpdate"
-        />
+        >
+            <template #bulk-actions="{ selectedCount, clearSelection }">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-muted-foreground">
+                        {{ selectedCount }} selected
+                    </span>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :disabled="selectedCount === 0"
+                        @click="clearSelection"
+                    >
+                        Clear selection
+                    </Button>
+                </div>
+            </template>
+        </DataTable>
     </div>
 </template>

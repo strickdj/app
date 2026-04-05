@@ -8,7 +8,7 @@ import type {
     Updater,
 } from '@tanstack/vue-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next';
-import { computed, h, ref, watch } from 'vue';
+import { computed, h, ref, useSlots, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/table';
 import type { TableFilters } from '@/lib/toApiFilters';
 import type {
+    DataTableBulkActionsSlotProps,
     DataTableColumn,
     DataTableColumnKey,
     DataTableColumns,
@@ -77,6 +78,12 @@ const emit = defineEmits<{
     'update:rowSelection': [rowSelection: RowSelectionState];
     'update:selectedRowIds': [rowIds: string[]];
 }>();
+
+defineSlots<{
+    'bulk-actions'?: (props: DataTableBulkActionsSlotProps) => unknown;
+}>();
+
+const slots = useSlots();
 
 const rows = computed<TRow[]>(() => {
     if (Array.isArray(props.items)) {
@@ -241,6 +248,32 @@ const applyRowSelection = (selection: RowSelectionState): void => {
 
     emit('update:selectedRowIds', selectedRowIds);
 };
+
+const selectedRowIds = computed<string[]>(() => {
+    return Object.entries(currentRowSelection.value)
+        .filter(([, isSelected]) => Boolean(isSelected))
+        .map(([id]) => id);
+});
+
+const selectedCount = computed<number>(() => {
+    return selectedRowIds.value.length;
+});
+
+const clearSelection = (): void => {
+    if (!props.selectable) {
+        return;
+    }
+
+    applyRowSelection({});
+};
+
+const hasBulkActionsSlot = computed<boolean>(() => {
+    return props.selectable && slots['bulk-actions'] !== undefined;
+});
+
+const hasToolbar = computed<boolean>(() => {
+    return props.searchable || hasBulkActionsSlot.value;
+});
 
 watch(
     rows,
@@ -468,21 +501,34 @@ const onSortColumn = (column: string): void => {
 
 <template>
     <div class="flex flex-col gap-3">
-        <div v-if="searchable" class="flex max-w-md items-center gap-2">
-            <Input
-                v-model="searchInput"
-                placeholder="Search..."
-                @keydown.enter.prevent="onSearchClick"
+        <div
+            v-if="hasToolbar"
+            class="flex flex-wrap items-center justify-between gap-2"
+        >
+            <div v-if="searchable" class="flex max-w-md items-center gap-2">
+                <Input
+                    v-model="searchInput"
+                    placeholder="Search..."
+                    @keydown.enter.prevent="onSearchClick"
+                />
+                <Button type="button" @click="onSearchClick"> Search </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="searchInput === '' && (filters?.search ?? '') === ''"
+                    @click="onClearSearch"
+                >
+                    Clear
+                </Button>
+            </div>
+
+            <slot
+                v-if="hasBulkActionsSlot"
+                name="bulk-actions"
+                :selected-row-ids="selectedRowIds"
+                :selected-count="selectedCount"
+                :clear-selection="clearSelection"
             />
-            <Button type="button" @click="onSearchClick"> Search </Button>
-            <Button
-                type="button"
-                variant="outline"
-                :disabled="searchInput === '' && (filters?.search ?? '') === ''"
-                @click="onClearSearch"
-            >
-                Clear
-            </Button>
         </div>
 
         <Table>
