@@ -37,7 +37,6 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { formatDateValue } from '@/lib/date';
 import type { TableFilters } from '@/lib/toApiFilters';
 import type { DataTableColumn, DataTableRow } from '@/types';
 
@@ -162,23 +161,11 @@ const formatColumnLabel = (column: string): string => {
         .replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
-const formatObjectValue = (value: Record<string, unknown>): string => {
-    for (const key of ['name', 'label', 'title', 'slug', 'email', 'id']) {
-        const candidate = value[key];
-
-        if (typeof candidate === 'string' || typeof candidate === 'number') {
-            return String(candidate);
-        }
-    }
-
-    return JSON.stringify(value) ?? '—';
-};
-
 const formatCellValue = (
     value: unknown,
     column: DataTableColumn,
     row: DataTableRow,
-): string => {
+): unknown => {
     if (value === null || value === undefined || value === '') {
         return '—';
     }
@@ -187,33 +174,7 @@ const formatCellValue = (
         return column.formatter(value, row, column);
     }
 
-    const formattedDateValue = formatDateValue(value, column.key);
-
-    if (formattedDateValue !== null) {
-        return formattedDateValue;
-    }
-
-    if (Array.isArray(value)) {
-        return value.length > 0
-            ? value
-                  .map((item) => {
-                      if (item && typeof item === 'object') {
-                          return formatObjectValue(
-                              item as Record<string, unknown>,
-                          );
-                      }
-
-                      return String(item);
-                  })
-                  .join(', ')
-            : '—';
-    }
-
-    if (typeof value === 'object') {
-        return formatObjectValue(value as Record<string, unknown>);
-    }
-
-    return String(value);
+    return value;
 };
 
 const rowKey = (row: DataTableRow, index: number): string | number => {

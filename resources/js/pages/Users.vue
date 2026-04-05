@@ -34,7 +34,14 @@ const userTableColumns: DataTableColumn[] = [
     { key: 'id' },
     { key: 'name', sortable: true },
     { key: 'email', sortable: true },
-    { key: 'teams' },
+    {
+        key: 'teams',
+        formatter: (value: unknown): string => {
+            const v = value as Team[];
+
+            return v[0].name;
+        }
+    },
     {
         key: 'created_at',
         sortable: true,
