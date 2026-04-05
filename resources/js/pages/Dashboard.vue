@@ -24,6 +24,5 @@ defineOptions({
 <template>
     <Head title="Dashboard" />
 
-    <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4">
-    </div>
+    <div class="flex flex-col gap-4 overflow-x-auto rounded-xl p-4"></div>
 </template>

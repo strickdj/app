@@ -12,6 +12,8 @@ export type DataTableColumn<
     key: TKey;
     label?: string;
     sortable?: boolean;
+    hideable?: boolean;
+    defaultVisible?: boolean;
     formatter?: {
         bivarianceHack(
             value: TRow[TKey],
@@ -21,12 +23,11 @@ export type DataTableColumn<
     }['bivarianceHack'];
 };
 
-export type DataTableColumns<TRow extends DataTableRow = DataTableRow> =
-    Array<
-        {
-            [TKey in DataTableColumnKey<TRow>]: DataTableColumn<TRow, TKey>;
-        }[DataTableColumnKey<TRow>]
-    >;
+export type DataTableColumns<TRow extends DataTableRow = DataTableRow> = Array<
+    {
+        [TKey in DataTableColumnKey<TRow>]: DataTableColumn<TRow, TKey>;
+    }[DataTableColumnKey<TRow>]
+>;
 
 export type DataTableBulkActionsSlotProps = {
     selectedRowIds: string[];
@@ -35,9 +36,7 @@ export type DataTableBulkActionsSlotProps = {
 };
 
 export const defineDataTableColumns = <TRow extends DataTableRow>() => {
-    return <
-        const TColumns extends Array<DataTableColumns<TRow>[number]>,
-    >(
+    return <const TColumns extends Array<DataTableColumns<TRow>[number]>>(
         columns: TColumns,
     ): TColumns => {
         return columns;

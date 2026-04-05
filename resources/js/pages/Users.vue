@@ -32,11 +32,12 @@ type UserTableRow = Pick<User, 'id' | 'name' | 'email' | 'created_at'> & {
 const props = defineProps<Props>();
 
 const userTableColumns = defineDataTableColumns<UserTableRow>()([
-    { key: 'id' },
+    { key: 'id', hideable: false },
     { key: 'name', sortable: true },
     { key: 'email', sortable: true },
     {
         key: 'teams',
+        defaultVisible: false,
         formatter: (value): string => value[0]?.name ?? '—',
     },
     {

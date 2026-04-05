@@ -6,11 +6,19 @@ import type {
     HeaderContext,
     RowSelectionState,
     Updater,
+    VisibilityState,
 } from '@tanstack/vue-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next';
 import { computed, h, ref, useSlots, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
     Pagination,
@@ -121,8 +129,42 @@ const displayColumns = computed<DataTableColumns<TRow>>(() => {
     ] as DataTableColumns<TRow>;
 });
 
+const normalizedColumns = computed<DataTableColumns<TRow>>(() => {
+    return displayColumns.value.map((column) => ({
+        ...column,
+        hideable: column.hideable ?? true,
+        defaultVisible: column.defaultVisible ?? true,
+    })) as DataTableColumns<TRow>;
+});
+
+const columnVisibility = ref<VisibilityState>({});
+
+watch(
+    normalizedColumns,
+    (currentColumns) => {
+        const nextVisibility: VisibilityState = {};
+
+        for (const column of currentColumns) {
+            const key = column.key;
+            const existingVisibility = columnVisibility.value[key];
+
+            nextVisibility[key] =
+                existingVisibility ?? column.defaultVisible ?? true;
+        }
+
+        columnVisibility.value = nextVisibility;
+    },
+    { immediate: true },
+);
+
+const visibleDataColumnCount = computed<number>(() => {
+    return normalizedColumns.value.filter((column) => {
+        return columnVisibility.value[column.key] ?? true;
+    }).length;
+});
+
 const renderedColumnCount = computed<number>(() => {
-    return displayColumns.value.length + (props.selectable ? 1 : 0);
+    return visibleDataColumnCount.value + (props.selectable ? 1 : 0);
 });
 
 const totalItems = computed<number>(() => {
@@ -271,8 +313,16 @@ const hasBulkActionsSlot = computed<boolean>(() => {
     return props.selectable && slots['bulk-actions'] !== undefined;
 });
 
+const hasColumnVisibilityToggles = computed<boolean>(() => {
+    return normalizedColumns.value.some((column) => column.hideable === true);
+});
+
 const hasToolbar = computed<boolean>(() => {
-    return props.searchable || hasBulkActionsSlot.value;
+    return (
+        props.searchable ||
+        hasBulkActionsSlot.value ||
+        hasColumnVisibilityToggles.value
+    );
 });
 
 watch(
@@ -288,7 +338,8 @@ watch(
 
         const nextSelection = Object.fromEntries(
             Object.entries(localRowSelection.value).filter(
-                ([id, isSelected]) => Boolean(isSelected) && visibleRowIds.has(id),
+                ([id, isSelected]) =>
+                    Boolean(isSelected) && visibleRowIds.has(id),
             ),
         );
 
@@ -378,6 +429,7 @@ const createColumnDefinition = <TKey extends DataTableColumnKey<TRow>>(
         id: column.key,
         accessorFn: (row: TRow): TRow[TKey] => row[column.key],
         enableSorting: isColumnSortable(column),
+        enableHiding: column.hideable ?? true,
         header: column.label ?? formatColumnLabel(column.key),
         cell: ({ getValue, row }: CellContext<TRow, TRow[TKey]>) =>
             formatCellValue(getValue() as TRow[TKey], column, row.original),
@@ -385,7 +437,7 @@ const createColumnDefinition = <TKey extends DataTableColumnKey<TRow>>(
 };
 
 const columnDefinitions = computed<ColumnDef<TRow>[]>(() => {
-    const baseColumns = displayColumns.value.map((column) => ({
+    const baseColumns = normalizedColumns.value.map((column) => ({
         ...createColumnDefinition(column),
     }));
 
@@ -397,6 +449,7 @@ const columnDefinitions = computed<ColumnDef<TRow>[]>(() => {
         {
             id: '__select',
             enableSorting: false,
+            enableHiding: false,
             header: ({ table }: HeaderContext<TRow, unknown>) =>
                 h(Checkbox, {
                     modelValue: table.getIsAllPageRowsSelected()
@@ -436,6 +489,12 @@ const table = useVueTable<TRow>({
     manualSorting: true,
     enableRowSelection: () => props.selectable,
     manualPagination: true,
+    onColumnVisibilityChange: (updater: Updater<VisibilityState>) => {
+        columnVisibility.value =
+            typeof updater === 'function'
+                ? updater(columnVisibility.value)
+                : updater;
+    },
     onRowSelectionChange: (updater: Updater<RowSelectionState>) => {
         const nextSelection =
             typeof updater === 'function'
@@ -445,21 +504,27 @@ const table = useVueTable<TRow>({
         applyRowSelection(nextSelection);
     },
     state: {
+        get columnVisibility() {
+            return columnVisibility.value;
+        },
         get rowSelection() {
             return currentRowSelection.value;
         },
     },
 });
 
-const headerGroups = ref(table.getHeaderGroups());
-const tableRows = ref(table.getRowModel().rows);
-
-watch(columnDefinitions, () => {
-    headerGroups.value = table.getHeaderGroups();
+const hideableColumns = computed(() => {
+    return table
+        .getAllLeafColumns()
+        .filter((column) => column.id !== '__select' && column.getCanHide());
 });
 
-watch([rows, columnDefinitions, currentRowSelection], () => {
-    tableRows.value = table.getRowModel().rows;
+const headerGroups = computed(() => {
+    return table.getHeaderGroups();
+});
+
+const tableRows = computed(() => {
+    return table.getRowModel().rows;
 });
 
 const getSortDirection = (
@@ -515,7 +580,9 @@ const onSortColumn = (column: string): void => {
                 <Button
                     type="button"
                     variant="outline"
-                    :disabled="searchInput === '' && (filters?.search ?? '') === ''"
+                    :disabled="
+                        searchInput === '' && (filters?.search ?? '') === ''
+                    "
                     @click="onClearSearch"
                 >
                     Clear
@@ -529,6 +596,27 @@ const onSortColumn = (column: string): void => {
                 :selected-count="selectedCount"
                 :clear-selection="clearSelection"
             />
+
+            <DropdownMenu v-if="hasColumnVisibilityToggles">
+                <DropdownMenuTrigger as-child>
+                    <Button type="button" variant="outline">Columns</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-48">
+                    <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                    <DropdownMenuCheckboxItem
+                        v-for="column in hideableColumns"
+                        :key="column.id"
+                        :model-value="column.getIsVisible()"
+                        class="capitalize"
+                        @update:model-value="
+                            (value: boolean | 'indeterminate') =>
+                                column.toggleVisibility(Boolean(value))
+                        "
+                    >
+                        {{ formatColumnLabel(column.id) }}
+                    </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
 
         <Table>
