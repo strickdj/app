@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import type { RowSelectionState } from '@tanstack/vue-table';
+import { ref } from 'vue';
 import { index } from '@/actions/App/Http/Controllers/UserController';
 import DataTable from '@/components/DataTable.vue';
+import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatDateTime, parseDateValue } from '@/lib/date';
@@ -20,6 +23,7 @@ type PaginatedItems<T> = {
 };
 
 type Props = {
+    canBulkDeleteUsers: boolean;
     currentTeam?: Team | null;
     users: PaginatedItems<UserTableRow>;
     filters: TableFilters;
@@ -30,6 +34,10 @@ type UserTableRow = Pick<User, 'id' | 'name' | 'email' | 'created_at'> & {
 };
 
 const props = defineProps<Props>();
+const rowSelection = ref<RowSelectionState>({});
+const bulkDeleteForm = useForm<{ user_ids: number[] }>({
+    user_ids: [],
+});
 
 const userTableColumns = defineDataTableColumns<UserTableRow>()([
     { key: 'id', hideable: false },
@@ -58,6 +66,29 @@ const userTableColumns = defineDataTableColumns<UserTableRow>()([
 ]);
 
 const dataTableColumns: DataTableColumns<DataTableRow> = userTableColumns;
+
+const submitBulkDelete = (
+    selectedRowIds: string[],
+    clearSelection: () => void,
+): void => {
+    if (!props.currentTeam || selectedRowIds.length === 0) {
+        return;
+    }
+
+    bulkDeleteForm.user_ids = selectedRowIds.map((id) => Number(id));
+
+    bulkDeleteForm.delete(index(props.currentTeam.slug).url, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+        onSuccess: () => {
+            bulkDeleteForm.reset();
+            bulkDeleteForm.clearErrors();
+            clearSelection();
+            rowSelection.value = {};
+        },
+    });
+};
 
 const handleFiltersUpdate = (filters: TableFilters): void => {
     if (!props.currentTeam) {
@@ -99,21 +130,39 @@ defineOptions({
             :filters="filters"
             :searchable="true"
             :selectable="true"
+            v-model:row-selection="rowSelection"
             @update:filters="handleFiltersUpdate"
         >
-            <template #bulk-actions="{ selectedCount, clearSelection }">
-                <div class="flex items-center gap-2">
-                    <span class="text-sm text-muted-foreground">
-                        {{ selectedCount }} selected
-                    </span>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        :disabled="selectedCount === 0"
-                        @click="clearSelection"
-                    >
-                        Clear selection
-                    </Button>
+            <template
+                #bulk-actions="{ selectedRowIds, selectedCount, clearSelection }"
+            >
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm text-muted-foreground">
+                            {{ selectedCount }} selected
+                        </span>
+
+                        <Button
+                            v-if="canBulkDeleteUsers"
+                            type="button"
+                            variant="destructive"
+                            :disabled="selectedCount === 0 || bulkDeleteForm.processing"
+                            @click="submitBulkDelete(selectedRowIds, clearSelection)"
+                        >
+                            Delete selected
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="selectedCount === 0 || bulkDeleteForm.processing"
+                            @click="clearSelection"
+                        >
+                            Clear selection
+                        </Button>
+                    </div>
+
+                    <InputError :message="bulkDeleteForm.errors.user_ids" />
                 </div>
             </template>
         </DataTable>

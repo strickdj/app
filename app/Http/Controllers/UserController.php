@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Users\BulkDestroyUsersRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\QueryBuilder\AllowedFilter;
@@ -17,6 +20,8 @@ class UserController extends Controller
      */
     public function index(Request $request): Response
     {
+        $user = $request->user();
+        $currentTeam = $user?->currentTeam;
         $perPage = $request->integer('page.size', 10);
         $currentPage = $request->integer('page.number', 1);
 
@@ -45,6 +50,9 @@ class UserController extends Controller
 
         return Inertia::render('Users', [
             'users' => $users,
+            'canBulkDeleteUsers' => $currentTeam !== null
+                ? $user?->hasTeamPermission($currentTeam, 'member:remove')
+                : false,
             'filters' => [
                 'search' => (string) $request->input('filter.search', ''),
                 'sort' => ltrim($rawSort, '-'),
@@ -53,5 +61,25 @@ class UserController extends Controller
                 'page' => $currentPage,
             ],
         ]);
+    }
+
+    /**
+     * Delete the selected users.
+     */
+    public function bulkDestroy(BulkDestroyUsersRequest $request): RedirectResponse
+    {
+        /** @var array<int, int> $userIds */
+        $userIds = $request->validated('user_ids');
+
+        DB::transaction(function () use ($userIds): void {
+            User::query()
+                ->whereKey($userIds)
+                ->get()
+                ->each(function (User $user): void {
+                    $user->delete();
+                });
+        });
+
+        return back();
     }
 }

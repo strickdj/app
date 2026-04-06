@@ -15,6 +15,7 @@ Route::prefix('{current_team}')
     ->group(function (): void {
         Route::inertia('dashboard', 'Dashboard')->name('dashboard');
         Route::get('users', [UserController::class, 'index'])->name('users');
+        Route::delete('users', [UserController::class, 'bulkDestroy'])->name('users.bulk-destroy');
 
     });
 
