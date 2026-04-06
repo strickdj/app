@@ -79,6 +79,9 @@
             "@lint:check",
             "@php artisan test"
         ],
+        "seed:users": [
+            "@php artisan db:seed --class=UsersSeeder --no-interaction"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
