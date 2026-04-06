@@ -86,6 +86,11 @@ const submitBulkDelete = (
             bulkDeleteForm.clearErrors();
             clearSelection();
             rowSelection.value = {};
+
+            // Ensure the paginated users payload is re-fetched after deletion.
+            router.reload({
+                only: ['users', 'filters', 'canBulkDeleteUsers'],
+            });
         },
     });
 };

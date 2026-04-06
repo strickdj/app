@@ -480,7 +480,9 @@ const columnDefinitions = computed<ColumnDef<TRow>[]>(() => {
 });
 
 const table = useVueTable<TRow>({
-    data: rows,
+    get data() {
+        return rows.value;
+    },
     get columns() {
         return columnDefinitions.value;
     },
