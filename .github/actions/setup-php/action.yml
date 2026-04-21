@@ -1,0 +1,33 @@
+name: Setup PHP
+description: Install PHP with extensions and Composer dependencies
+
+inputs:
+  php-version:
+    description: PHP version to install
+    required: false
+    default: '8.4'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        extensions: >
+          pdo,
+          pdo_sqlite,
+          sqlite3,
+          bcmath,
+          ctype,
+          fileinfo,
+          json,
+          mbstring,
+          openssl,
+          tokenizer,
+          xml
+        coverage: none
+
+    - name: Install Composer dependencies
+      uses: ramsey/composer-install@v3
+

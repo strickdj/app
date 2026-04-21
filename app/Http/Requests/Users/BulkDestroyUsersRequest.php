@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Users;
 
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -26,7 +27,7 @@ class BulkDestroyUsersRequest extends FormRequest
     /**
      * Configure the validator instance.
      *
-     * @return array<int, \\Closure(Validator): void>
+     * @return array<int, Closure(Validator): void>
      */
     public function after(): array
     {

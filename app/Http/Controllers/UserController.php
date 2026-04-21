@@ -51,7 +51,7 @@ class UserController extends Controller
         return Inertia::render('Users', [
             'users' => $users,
             'canBulkDeleteUsers' => $currentTeam !== null
-                ? $user?->hasTeamPermission($currentTeam, 'member:remove')
+                ? $user->hasTeamPermission($currentTeam, 'member:remove')
                 : false,
             'filters' => [
                 'search' => (string) $request->input('filter.search', ''),

@@ -135,11 +135,14 @@ defineOptions({
             :filters="filters"
             :searchable="true"
             :selectable="true"
-            v-model:row-selection="rowSelection"
             @update:filters="handleFiltersUpdate"
         >
             <template
-                #bulk-actions="{ selectedRowIds, selectedCount, clearSelection }"
+                #bulk-actions="{
+                    selectedRowIds,
+                    selectedCount,
+                    clearSelection,
+                }"
             >
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-2">
@@ -151,8 +154,12 @@ defineOptions({
                             v-if="canBulkDeleteUsers"
                             type="button"
                             variant="destructive"
-                            :disabled="selectedCount === 0 || bulkDeleteForm.processing"
-                            @click="submitBulkDelete(selectedRowIds, clearSelection)"
+                            :disabled="
+                                selectedCount === 0 || bulkDeleteForm.processing
+                            "
+                            @click="
+                                submitBulkDelete(selectedRowIds, clearSelection)
+                            "
                         >
                             Delete selected
                         </Button>
@@ -160,7 +167,9 @@ defineOptions({
                         <Button
                             type="button"
                             variant="outline"
-                            :disabled="selectedCount === 0 || bulkDeleteForm.processing"
+                            :disabled="
+                                selectedCount === 0 || bulkDeleteForm.processing
+                            "
                             @click="clearSelection"
                         >
                             Clear selection
