@@ -24,7 +24,7 @@ Route::middleware(['auth'])->group(function (): void {
 });
 
 Route::get('/hello', function () {
-    return 'Hello World!';
+    return 'Hello World!!';
 });
 
 require __DIR__.'/settings.php';
