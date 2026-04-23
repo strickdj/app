@@ -109,7 +109,7 @@ const confirmCancelInvitation = (invitation: TeamInvitation) => {
             />
 
             <Form
-                v-bind="update.form(team.slug)"
+                v-bind="update.patch(team.slug)"
                 class="space-y-6"
                 v-slot="{ errors, processing, recentlySuccessful }"
             >
