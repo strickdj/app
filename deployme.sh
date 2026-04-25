@@ -3,37 +3,98 @@
 set -euo pipefail
 
 DRY_RUN=0
-BASE_ARG="./"
-
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run|-n)
-      DRY_RUN=1
-      ;;
-    --help|-h)
-      echo "Usage: $0 [base_dir] [--dry-run]"
-      exit 0
-      ;;
-    *)
-      if [[ "$BASE_ARG" != "./" ]]; then
-        echo "Only one base_dir argument is allowed." >&2
-        exit 1
-      fi
-      BASE_ARG="$arg"
-      ;;
-  esac
-done
-
-BASE_DIR="$(cd "$BASE_ARG" && pwd)"   # canonicalize path even when ssh starts in home dir
-APP_DIR="$BASE_DIR"
-RELEASES="$APP_DIR/releases"
-TIMESTAMP=$(date +%Y%m%d%H%M%S)
-NEW_RELEASE=$RELEASES/$TIMESTAMP
-LOCK_FILE="$RELEASES/.deploy.lock"
-ARCHIVE_PATH="/tmp/release.tar.gz"
-PREVIOUS_RELEASE="$(readlink -f "$APP_DIR/current" 2>/dev/null || true)"
+BASE_DIR=""
+RELEASES=""
+NEW_RELEASE=""
+PREVIOUS_RELEASE=""
 SWITCHED=0
 LOCK_HELD=0
+
+readonly ARCHIVE_PATH="/tmp/release.tar.gz"
+readonly RELEASE_KEEP=4
+
+print_usage() {
+  echo "Usage: $0 [base_dir] [--dry-run]"
+}
+
+parse_args() {
+  local arg
+  local base_arg="./"
+
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run|-n)
+        DRY_RUN=1
+        ;;
+      --help|-h)
+        print_usage
+        exit 0
+        ;;
+      *)
+        if [[ "$base_arg" != "./" ]]; then
+          echo "Only one base_dir argument is allowed." >&2
+          exit 1
+        fi
+        base_arg="$arg"
+        ;;
+    esac
+  done
+
+  BASE_DIR="$(cd "$base_arg" && pwd)" # canonicalize path even when ssh starts in home dir
+}
+
+init_paths() {
+  local timestamp
+
+  RELEASES="$BASE_DIR/releases"
+  timestamp="$(date +%Y%m%d%H%M%S)"
+  NEW_RELEASE="$RELEASES/$timestamp"
+}
+
+resolve_current_release() {
+  local current_link="$BASE_DIR/current"
+
+  if [[ ! -e "$current_link" && ! -L "$current_link" ]]; then
+    printf ''
+    return 0
+  fi
+
+  if [[ ! -L "$current_link" ]]; then
+    echo "Refusing to deploy: $current_link exists but is not a symlink" >&2
+    return 1
+  fi
+
+  local resolved
+  resolved="$(readlink -f "$current_link" 2>/dev/null || true)"
+
+  if [[ -z "$resolved" || ! -d "$resolved" ]]; then
+    echo "Refusing to deploy: $current_link does not point to a valid release directory" >&2
+    return 1
+  fi
+
+  case "$resolved" in
+    "$RELEASES"/*)
+      printf '%s\n' "$resolved"
+      ;;
+    *)
+      echo "Refusing to deploy: $current_link points outside of $RELEASES" >&2
+      return 1
+      ;;
+  esac
+}
+
+atomic_switch_current() {
+  local target_release="$1"
+  local tmp_link="$BASE_DIR/.current.tmp.$$"
+
+  if [[ ! -d "$target_release" ]]; then
+    echo "Cannot switch current symlink: release directory not found: $target_release" >&2
+    return 1
+  fi
+
+  ln -sfn "$target_release" "$tmp_link"
+  mv -Tf "$tmp_link" "$BASE_DIR/current"
+}
 
 cleanup() {
   if [[ "$LOCK_HELD" -eq 1 ]]; then
@@ -43,7 +104,7 @@ cleanup() {
 
 rollback() {
   if [[ "$SWITCHED" -eq 1 && -n "${PREVIOUS_RELEASE:-}" ]]; then
-    ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR/current"
+    atomic_switch_current "$PREVIOUS_RELEASE"
     echo "Rolled back to previous release: $PREVIOUS_RELEASE" >&2
   fi
 }
@@ -54,21 +115,19 @@ on_error() {
   exit 1
 }
 
-trap cleanup EXIT
-trap on_error ERR
-
 ensure_deploy_lock() {
+  local lock_file="$RELEASES/.deploy.lock"
+
   if ! command -v flock >/dev/null 2>&1; then
     echo "Required command not found: flock" >&2
     return 1
   fi
 
   mkdir -p "$RELEASES"
-  exec 200>"$LOCK_FILE"
+  exec 200>"$lock_file"
 
   if ! flock -n 200; then
-    echo "Another deployment appears to be in progress: $LOCK_FILE" >&2
-
+    echo "Another deployment appears to be in progress: $lock_file" >&2
     return 1
   fi
 
@@ -78,94 +137,87 @@ ensure_deploy_lock() {
   return 0
 }
 
-cd "$BASE_DIR"
+ensure_structure() {
+  local -a structure_entries=(
+    "dir:releases" # release directories
+    "dir:shared"
+    "dir:shared/bootstrap"
+    "dir:shared/bootstrap/cache"
+    "dir:shared/storage"
+    "dir:shared/storage/logs"
+    "dir:shared/storage/framework"
+    "dir:shared/storage/framework/views"
+    "dir:shared/storage/framework/cache"
+    "dir:shared/storage/framework/sessions"
+    "file:shared/.env"
+  )
+  local entry
+  local type
+  local path
+  local full_path
 
-if [[ "$DRY_RUN" -eq 0 ]]; then
-  if ! ensure_deploy_lock; then
-    exit 1
-  fi
-else
-  echo "Dry run mode enabled. No filesystem or database changes will be made."
-fi
+  for entry in "${structure_entries[@]}"; do
+    [[ -z "${entry:-}" ]] && continue
 
-# /var/www/myapp
-#  ├── releases/
-#  ├── current -> releases/20260422120000
-#  ├── shared/
-#      ├── .env
-#      ├── storage/
+    type="${entry%%:*}"
+    path="${entry#*:}"
 
-# ensure releases directory structure
-# format: "<type>:<relative-path>"
-# type must be "dir" or "file"
-STRUCTURE_ENTRIES=(
-  "dir:releases"       # release directories
-  "dir:shared"         # shared root
-  "dir:shared/storage" # persistent Laravel storage
-  "file:shared/.env"   # shared environment file
-)
-
-for entry in "${STRUCTURE_ENTRIES[@]}"; do
-  # skip empty lines defensively
-  [[ -z "${entry:-}" ]] && continue
-
-  # strict split: everything before first ":" is type, remainder is path
-  type="${entry%%:*}"
-  path="${entry#*:}"
-
-  if [[ -z "$type" || -z "$path" || "$type" == "$entry" ]]; then
-    echo "Invalid structure entry: '$entry' (expected 'dir:path' or 'file:path')" >&2
-    exit 1
-  fi
-
-  FULL_PATH="$BASE_DIR/$path"
-
-  case "$type" in
-    dir)
-      if [[ "$DRY_RUN" -eq 1 ]]; then
-        if [[ -d "$FULL_PATH" ]]; then
-          echo "[dry-run] Directory exists: $FULL_PATH"
-        else
-          echo "[dry-run] Would create directory: $FULL_PATH"
-        fi
-      else
-        mkdir -p "$FULL_PATH"
-      fi
-      ;;
-    file)
-      if [[ "$DRY_RUN" -eq 1 ]]; then
-        if [[ ! -d "$(dirname "$FULL_PATH")" ]]; then
-          echo "[dry-run] Would create parent directory: $(dirname "$FULL_PATH")"
-        fi
-
-        if [[ -f "$FULL_PATH" ]]; then
-          echo "[dry-run] File exists: $FULL_PATH"
-        else
-          echo "[dry-run] Would create file: $FULL_PATH"
-        fi
-      else
-        mkdir -p "$(dirname "$FULL_PATH")"
-        [[ -f "$FULL_PATH" ]] || touch "$FULL_PATH"
-      fi
-      ;;
-    *)
-      echo "Unknown structure type '$type' in entry '$entry'" >&2
+    if [[ -z "$type" || -z "$path" || "$type" == "$entry" ]]; then
+      echo "Invalid structure entry: '$entry' (expected 'dir:path' or 'file:path')" >&2
       exit 1
-      ;;
-  esac
-done
+    fi
 
-if [[ ! -r "$ARCHIVE_PATH" ]]; then
-  echo "Release archive not found or not readable: $ARCHIVE_PATH" >&2
-  exit 1
-fi
+    full_path="$BASE_DIR/$path"
 
-if tar -tzf "$ARCHIVE_PATH" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
-  echo "Unsafe paths detected in release archive: $ARCHIVE_PATH" >&2
-  exit 1
-fi
+    case "$type" in
+      dir)
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+          if [[ -d "$full_path" ]]; then
+            echo "[dry-run] Directory exists: $full_path"
+          else
+            echo "[dry-run] Would create directory: $full_path"
+          fi
+        else
+          mkdir -p "$full_path"
+        fi
+        ;;
+      file)
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+          if [[ ! -d "$(dirname "$full_path")" ]]; then
+            echo "[dry-run] Would create parent directory: $(dirname "$full_path")"
+          fi
 
-if [[ "$DRY_RUN" -eq 1 ]]; then
+          if [[ -f "$full_path" ]]; then
+            echo "[dry-run] File exists: $full_path"
+          else
+            echo "[dry-run] Would create file: $full_path"
+          fi
+        else
+          mkdir -p "$(dirname "$full_path")"
+          [[ -f "$full_path" ]] || touch "$full_path"
+        fi
+        ;;
+      *)
+        echo "Unknown structure type '$type' in entry '$entry'" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
+validate_archive() {
+  if [[ ! -r "$ARCHIVE_PATH" ]]; then
+    echo "Release archive not found or not readable: $ARCHIVE_PATH" >&2
+    exit 1
+  fi
+
+  if tar -tzf "$ARCHIVE_PATH" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+    echo "Unsafe paths detected in release archive: $ARCHIVE_PATH" >&2
+    exit 1
+  fi
+}
+
+print_dry_run_plan() {
   echo "[dry-run] Release archive validated: $ARCHIVE_PATH"
   echo "[dry-run] Would create release directory: $NEW_RELEASE"
   echo "[dry-run] Would extract archive into release directory"
@@ -176,53 +228,135 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "[dry-run] Would run config/route/view cache commands"
   echo "[dry-run] Would atomically switch current symlink"
   echo "[dry-run] Would run php artisan queue:restart"
-  echo "[dry-run] Would clean up old releases (keep last 4)"
+  echo "[dry-run] Would clean up old releases (keep last $RELEASE_KEEP)"
   echo "Dry run complete."
-  exit 0
-fi
+}
 
-echo "Creating release directory..."
-mkdir -p "$NEW_RELEASE"
+prepare_release_directory() {
+  echo "Creating release directory..."
+  mkdir -p "$NEW_RELEASE"
 
-echo "Extracting build..."
-tar -xzf "$ARCHIVE_PATH" -C "$NEW_RELEASE"
-rm "$ARCHIVE_PATH"
+  echo "Extracting build..."
+  tar -xzf "$ARCHIVE_PATH" -C "$NEW_RELEASE"
+  rm "$ARCHIVE_PATH"
+}
 
-echo "Linking shared files..."
-ln -sfn "$APP_DIR/shared/.env" "$NEW_RELEASE/.env"
-if [[ -e "$NEW_RELEASE/storage" && ! -L "$NEW_RELEASE/storage" ]]; then
-  rm -rf "$NEW_RELEASE/storage"
-fi
-ln -sfn "$APP_DIR/shared/storage" "$NEW_RELEASE/storage"
+link_shared_files() {
+  echo "Linking shared files..."
+  ln -sfn "$BASE_DIR/shared/.env" "$NEW_RELEASE/.env"
 
-cd "$NEW_RELEASE"
+  if [[ -e "$NEW_RELEASE/storage" && ! -L "$NEW_RELEASE/storage" ]]; then
+    rm -rf "$NEW_RELEASE/storage"
+  fi
+  ln -sfn "$BASE_DIR/shared/storage" "$NEW_RELEASE/storage"
 
-echo "Installing dependencies (safety net)..."
-composer install --no-dev --prefer-dist --no-interaction
+  if [[ -e "$NEW_RELEASE/bootstrap/cache" && ! -L "$NEW_RELEASE/bootstrap/cache" ]]; then
+    rm -rf "$NEW_RELEASE/bootstrap/cache"
+  fi
+  ln -sfn "$BASE_DIR/shared/bootstrap/cache" "$NEW_RELEASE/bootstrap/cache"
+}
 
-echo "Validating migrations (--pretend)..."
-php artisan migrate --force --pretend
+install_and_migrate() {
+  cd "$NEW_RELEASE"
 
-echo "Applying migrations..."
-php artisan migrate --force
+  echo "Installing dependencies (safety net)..."
+  composer install --no-dev --prefer-dist --no-interaction
 
-echo "Running optimizations..."
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+  echo "Validating migrations (--pretend)..."
+  php artisan migrate --force --pretend
 
-echo "Switching release (atomic)..."
-ln -sfn "$NEW_RELEASE" "$APP_DIR/current"
-SWITCHED=1
+  echo "Applying migrations..."
+  php artisan migrate --force
+}
 
-echo "Restarting queue workers..."
-php artisan queue:restart
+optimize_and_restart_queue() {
+  cd "$BASE_DIR/current"
 
-echo "Cleanup old releases (keep last 4)..."
-find "$RELEASES" -mindepth 1 -maxdepth 1 -printf '%T@ %p\0' \
-  | sort -zr \
-  | tail -zn +5 \
-  | cut -z -d' ' -f2- \
-  | xargs -0 rm -rf || true
+  echo "Running optimizations..."
+  php artisan config:cache
+  php artisan route:cache
+  php artisan view:clear
+  php artisan view:cache
 
-echo "Deploy complete."
+  echo "Restarting queue workers..."
+  php artisan queue:restart
+}
+
+cleanup_old_releases() {
+  local current_release="$1"
+  echo "Cleanup old releases (keep last $RELEASE_KEEP)..."
+  local entry
+  local release_dir
+  local -a release_entries=()
+  local kept=0
+
+  while IFS= read -r -d '' entry; do
+    release_entries+=("${entry#* }")
+  done < <(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' | sort -zr)
+
+  for release_dir in "${release_entries[@]}"; do
+    if [[ "$release_dir" == "$current_release" || "$release_dir" == "$NEW_RELEASE" || "$release_dir" == "$PREVIOUS_RELEASE" ]]; then
+      continue
+    fi
+
+    if [[ "$kept" -lt "$RELEASE_KEEP" ]]; then
+      kept=$((kept + 1))
+      continue
+    fi
+
+    rm -rf "$release_dir"
+  done
+}
+
+main() {
+  local current_release
+
+  parse_args "$@"
+  init_paths
+
+  trap cleanup EXIT
+  trap on_error ERR
+
+  cd "$BASE_DIR"
+
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    if ! ensure_deploy_lock; then
+      exit 1
+    fi
+  else
+    echo "Dry run mode enabled. No filesystem or database changes will be made."
+  fi
+
+  PREVIOUS_RELEASE="$(resolve_current_release)"
+
+  # /var/www/myapp
+  #  ├── releases/
+  #  ├── current -> releases/20260422120000
+  #  ├── shared/
+  #      ├── .env
+  #      ├── storage/
+  ensure_structure
+  validate_archive
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    print_dry_run_plan
+    exit 0
+  fi
+
+  prepare_release_directory
+  link_shared_files
+  install_and_migrate
+
+  echo "Switching release (atomic)..."
+  atomic_switch_current "$NEW_RELEASE"
+  SWITCHED=1
+
+  current_release="$(resolve_current_release)"
+
+  optimize_and_restart_queue
+  cleanup_old_releases "$current_release"
+
+  echo "Deploy complete."
+}
+
+main "$@"

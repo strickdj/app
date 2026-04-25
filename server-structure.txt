@@ -1,4 +1,0 @@
-dir releases
-dir shared
-file shared/.env
-dir shared/storage

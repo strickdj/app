@@ -28,3 +28,5 @@ yarn-error.log
 /.zed
 _ide_helper.php
 .phpstorm.meta.php
+AGENTS.md
+boost.json
