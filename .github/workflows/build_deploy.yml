@@ -1,0 +1,119 @@
+name: Build and Deploy Laravel App
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run deploy script in dry-run mode"
+        required: true
+        default: true
+        type: boolean
+      app_dir:
+        description: "Absolute app path on server"
+        required: true
+        default: "/var/www/myapp"
+        type: string
+
+jobs:
+  build_deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: ./.github/actions/setup-php
+
+      - name: Install production PHP dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--no-dev --prefer-dist --optimize-autoloader"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Optimize Laravel
+        run: php artisan optimize
+
+      - name: Build release folder
+        run: |
+          mkdir -p release
+          rsync -a . release \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.ai \
+            --exclude=.dockerignore \
+            --exclude=.editorconfig \
+            --exclude=.gitattributes \
+            --exclude=.gitignore \
+            --exclude=.npmrc \
+            --exclude=.prettierignore \
+            --exclude=.prettierrc \
+            --exclude=AGENTS.md \
+            --exclude=boost.json \
+            --exclude=components.json \
+            --exclude=compose.dev.yaml \
+            --exclude=eslint.config.js \
+            --exclude=mise.toml \
+            --exclude=package.json \
+            --exclude=package-lock.json \
+            --exclude=phpstan.neon \
+            --exclude=phpunit.xml \
+            --exclude=pint.json \
+            --exclude=rector.php \
+            --exclude=tsconfig.json \
+            --exclude=vite.config.ts \
+            --exclude=node_modules \
+            --exclude=tests \
+            --exclude=storage/logs \
+            --exclude=.env \
+            --exclude=release \
+            --exclude=storage/framework/cache \
+            --exclude=storage/framework/sessions \
+            --exclude=storage/framework/views
+
+      - name: Create archive
+        run: tar -czf release.tar.gz -C release .
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: release.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload release to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "release.tar.gz"
+          target: "/tmp"
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              "${{ inputs.app_dir }}/deployme.sh" "${{ inputs.app_dir }}" --dry-run
+            else
+              "${{ inputs.app_dir }}/deployme.sh" "${{ inputs.app_dir }}"
+            fi
+

@@ -41,3 +41,16 @@ This reduces CI time and resource usage while keeping checks strict for changed 
 - If both PHP and JS files change, both jobs run.
 - If no matched files change for a job, that job is skipped by design.
 
+## `build_deploy.yml`
+
+`build_deploy.yml` is a combined manual workflow that builds a release archive and immediately deploys it in the same run.
+
+- It installs production PHP dependencies, builds frontend assets, optimizes Laravel, and packages the deployable files into `release.tar.gz`.
+- It uploads that archive as a workflow artifact named `release-<commit-sha>` for traceability.
+- It then uploads `release.tar.gz` to the server and runs `deployme.sh` in dry-run or live mode.
+
+### When to use it
+
+- Use `build_deploy.yml` when you want the simplest deployment flow with no cross-workflow artifact lookup.
+- The older `build_release.yml` + `deploy.yml` flow can still exist, but `build_deploy.yml` avoids artifact handoff complexity.
+
