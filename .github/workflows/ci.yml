@@ -66,6 +66,9 @@ jobs:
       - name: Setup PHP
         uses: ./.github/actions/setup-php
 
+      - name: Install Composer dependencies
+        uses: ramsey/composer-install@v3
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
