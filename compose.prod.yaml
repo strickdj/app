@@ -55,16 +55,18 @@ services:
 mysql:
   image: mysql:8.4
   restart: unless-stopped
+  ports:
+    - "${DB_PORT:-3306}:3306"
   environment:
-    MYSQL_DATABASE: ${MYSQL_DATABASE:-app}
-    MYSQL_USER: ${MYSQL_USERNAME:-app_user}
-    MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    MYSQL_DATABASE: ${DB_DATABASE:-app}
+    MYSQL_USER: ${DB_USERNAME:-app_user}
+    MYSQL_PASSWORD: ${DB_PASSWORD}
     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     # Security hardening
     MYSQL_ROOT_HOST: "localhost"
   volumes:
     - mysql-data-production:/var/lib/mysql
-    - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+    - ./docker/production/mysql/conf.d:/etc/mysql/conf.d:ro
   networks:
     - laravel-production
   healthcheck:
@@ -83,35 +85,11 @@ mysql:
   security_opt:
     - no-new-privileges:true
 
-  postgres:
-    image: postgres:16
-    restart: unless-stopped
-    user: postgres
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      - POSTGRES_DB=${POSTGRES_DATABASE:-app}
-      - POSTGRES_USER=${POSTGRES_USERNAME:-laravel}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret}
-    volumes:
-      - postgres-data-production:/var/lib/postgresql/data
-    networks:
-      - laravel-production
-    # Health check for PostgreSQL
-    # -----------------------------------------------------------
-    # Health checks allow Docker to determine if a service is operational.
-    # The 'pg_isready' command checks if PostgreSQL is ready to accept connections.
-    # This prevents dependent services from starting before the database is ready.
-    # -----------------------------------------------------------
-    healthcheck:
-      test: [ "CMD", "pg_isready" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:alpine
     restart: unless-stopped  # Automatically restart unless the service is explicitly stopped
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     networks:
       - laravel-production
     # Health check for Redis
@@ -147,7 +125,6 @@ networks:
   laravel-production:
 
 volumes:
-  postgres-data-production:
   mysql-data-production:
   laravel-storage-production:
   laravel-public-assets:
