@@ -29,7 +29,7 @@ APP_DIR="$BASE_DIR"
 RELEASES="$APP_DIR/releases"
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 NEW_RELEASE=$RELEASES/$TIMESTAMP
-LOCK_DIR="$APP_DIR/.deploy.lock"
+LOCK_FILE="$RELEASES/.deploy.lock"
 ARCHIVE_PATH="/tmp/release.tar.gz"
 PREVIOUS_RELEASE="$(readlink -f "$APP_DIR/current" 2>/dev/null || true)"
 SWITCHED=0
@@ -37,7 +37,7 @@ LOCK_HELD=0
 
 cleanup() {
   if [[ "$LOCK_HELD" -eq 1 ]]; then
-    rm -rf "$LOCK_DIR"
+    flock -u 200 || true
   fi
 }
 
@@ -57,14 +57,33 @@ on_error() {
 trap cleanup EXIT
 trap on_error ERR
 
+ensure_deploy_lock() {
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "Required command not found: flock" >&2
+    return 1
+  fi
+
+  mkdir -p "$RELEASES"
+  exec 200>"$LOCK_FILE"
+
+  if ! flock -n 200; then
+    echo "Another deployment appears to be in progress: $LOCK_FILE" >&2
+
+    return 1
+  fi
+
+  printf '%s\n' "$$" 1>&200
+  LOCK_HELD=1
+
+  return 0
+}
+
 cd "$BASE_DIR"
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
-  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    echo "Another deployment appears to be in progress: $LOCK_DIR" >&2
+  if ! ensure_deploy_lock; then
     exit 1
   fi
-  LOCK_HELD=1
 else
   echo "Dry run mode enabled. No filesystem or database changes will be made."
 fi

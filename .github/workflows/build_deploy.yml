@@ -111,9 +111,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           script: |
+            APP_DIR="${{ inputs.app_dir }}"
             if [ "${{ inputs.dry_run }}" = "true" ]; then
-              "${{ inputs.app_dir }}/deployme.sh" "${{ inputs.app_dir }}" --dry-run
+              bash "$APP_DIR/deployme.sh" "$APP_DIR" --dry-run
             else
-              "${{ inputs.app_dir }}/deployme.sh" "${{ inputs.app_dir }}"
+              bash "$APP_DIR/deployme.sh" "$APP_DIR"
             fi
 
