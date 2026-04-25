@@ -40,6 +40,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Generate Wayfinder routes
+        run: php artisan wayfinder:generate --no-interaction
+
       - name: Build frontend
         run: npm run build
 

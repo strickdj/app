@@ -27,7 +27,3 @@ runs:
           tokenizer,
           xml
         coverage: none
-
-    - name: Install Composer dependencies
-      uses: ramsey/composer-install@v3
-
