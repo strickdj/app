@@ -1,0 +1,12 @@
+{
+    "name": "strickdj/repository",
+    "homepage": "https://github.com/strickdj",
+    "repositories": [
+        { "type": "vcs", "url": "https://github.com/strickdj/tempconv" }
+    ],
+    "require-all": true,
+    "archive": {
+        "directory": "dist",
+        "format": "tar"
+    }
+}
