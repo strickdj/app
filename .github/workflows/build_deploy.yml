@@ -29,6 +29,9 @@ jobs:
       - name: Configure Composer auth
         run: |
           composer config --global http-basic.satis.q1k.net "$SATIS_USER" "$SATIS_PASS"
+        env:
+          SATIS_USER: ${{ secrets.SATIS_USER }}
+          SATIS_PASS: ${{ secrets.SATIS_PASS }}
 
       - name: Install production PHP dependencies
         uses: ramsey/composer-install@v3
