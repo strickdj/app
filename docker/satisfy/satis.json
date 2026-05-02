@@ -1,12 +1,14 @@
 {
     "name": "strickdj/repository",
-    "homepage": "https://github.com/strickdj",
+    "homepage": "https://satis.q1k.net",
+    "output-dir": "public",
     "repositories": [
         { "type": "vcs", "url": "https://github.com/strickdj/tempconv" }
     ],
     "require-all": true,
     "archive": {
         "directory": "dist",
-        "format": "tar"
+        "format": "tar",
+        "skip-dev": false
     }
 }

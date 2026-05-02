@@ -5,6 +5,7 @@ services:
       - "${SATISFY_PORT:-8000}:80"
     volumes:
       - ./docker/satisfy/satis.json:/var/www/html/satis.json
+      - ./docker/satisfy/parameters.yml:/var/www/html/config/parameters.yml
     environment:
       APP_ENV: ${APP_ENV:-dev}
       APP_DEBUG: ${APP_DEBUG:-1}
@@ -14,7 +15,6 @@ services:
     restart: unless-stopped
     ports:
       - "${DB_PORT:-3306}:3306"
-      - "127.0.0.1:${DB_PORT:-3306}:3306"
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-app}
       MYSQL_USER: ${DB_USERNAME:-app_user}

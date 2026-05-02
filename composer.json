@@ -8,6 +8,12 @@
         "framework"
     ],
     "license": "MIT",
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://satis.q1k.net"
+        }
+    ],
     "require": {
         "php": "^8.3",
         "inertiajs/inertia-laravel": "^3.0",
@@ -15,7 +21,8 @@
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
-        "spatie/laravel-query-builder": "^7.1"
+        "spatie/laravel-query-builder": "^7.1",
+        "strickdj/tempconv": "1.0.0"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7",
